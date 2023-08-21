@@ -1,18 +1,157 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uts_miqdad/profile_page.dart';
+import 'package:http/http.dart' as http;
 
-class LoginPage extends StatefulWidget {
-  const LoginPage({super.key});
+class LoginPage extends StatelessWidget {
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
 
-  @override
-  State<LoginPage> createState() => _LoginPageState();
-}
+  LoginPage({Key? key}) : super(key: key);
 
-class _LoginPageState extends State<LoginPage> {
-  final TextEditingController emailController = TextEditingController();
-  final TextEditingController passwordController = TextEditingController();
+  final bool _rememberMe = false;
+  late Timer _timer;
+
+  showLoaderDialog(BuildContext context, int _period) {
+    AlertDialog alert = AlertDialog(
+      content: Row(
+        children: [
+          const CircularProgressIndicator(),
+          Container(
+              margin: const EdgeInsets.only(left: 7),
+              child: const Text("Loading...")),
+        ],
+      ),
+    );
+    showDialog(
+      barrierDismissible: false,
+      context: context,
+      builder: (BuildContext context) {
+        _timer = Timer(Duration(seconds: _period), () {
+          Navigator.of(context).pop();
+        });
+        return alert;
+      },
+    ).then((value) => {
+          if (_timer.isActive) {_timer.cancel()}
+        });
+  }
+
+  void login(BuildContext context) async {
+    String email = _emailController.text;
+    String password = _passwordController.text;
+
+    if ((email == "") || (password == "")) {
+      Fluttertoast.showToast(
+          msg: "Username dan password tidak boleh kosong",
+          gravity: ToastGravity.CENTER,
+          toastLength: Toast.LENGTH_SHORT,
+          backgroundColor: const Color.fromARGB(255, 155, 168, 6),
+          textColor: Colors.white);
+      return;
+    }
+    showLoaderDialog(context, 30);
+    final response = await http.post(
+        Uri.parse("http://rismayana.diary-project.com/login.php"),
+        body: jsonEncode({"username": email, "password": password}));
+
+    int statCode = response.statusCode;
+
+    // ignore: use_build_context_synchronously
+    showLoaderDialog(context, 30);
+    if (statCode == 200) {
+      // ignore: use_build_context_synchronously
+      Navigator.pop(context);
+      bool _isLogin = true;
+      String dataLogin = response.body;
+      final data = jsonDecode(dataLogin);
+      String resStatus = data["username"];
+
+      // ignore: use_build_context_synchronously
+      showDialog(
+          context: context,
+          builder: (context) {
+            return AlertDialog(
+              title: const Text("Login Berhasil"),
+              content: Text("Selamat datang $resStatus"),
+              backgroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(15)),
+              actions: [
+                Align(
+                  alignment: Alignment.center,
+                  child: SizedBox(
+                    child: TextButton(
+                        style: TextButton.styleFrom(
+                          backgroundColor: const Color(0xffF3F4F8),
+                          disabledForegroundColor:
+                              Colors.grey.withOpacity(0.38),
+                        ),
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                          Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (context) => const ProfilePage()));
+                        },
+                        child: const Text(
+                          'OK',
+                          style: TextStyle(
+                            color: Colors.black,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        )),
+                  ),
+                )
+              ],
+            );
+          });
+    } else {
+      // ignore: use_build_context_synchronously
+      Navigator.pop(context);
+      // ignore: use_build_context_synchronously
+      showDialog(
+          context: context,
+          builder: (context) {
+            return AlertDialog(
+              title: const Text("Login gagal"),
+              content: const Text(
+                  "Username atau Password salah.\r\nSilahkan coba lagi!"),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(15)),
+              actions: [
+                Align(
+                  alignment: Alignment.center,
+                  child: SizedBox(
+                    width: 100,
+                    child: TextButton(
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                          Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (context) => const ProfilePage()));
+                        },
+                        child: const Text("OK")),
+                  ),
+                )
+              ],
+            );
+          });
+    }
+  }
+
+  void saveDataLogin(bool _isLogin, String dataLogin) async {
+    SharedPreferences pref = await SharedPreferences.getInstance();
+    pref.setBool('isLogin', _isLogin);
+    pref.setString("username", dataLogin);
+  }
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -64,7 +203,7 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                       const SizedBox(height: 8),
                       TextFormField(
-                        controller: emailController,
+                        controller: _emailController,
                         decoration: InputDecoration(
                           hintText: 'Enter Your Email',
                           hintStyle: GoogleFonts.poppins(
@@ -101,7 +240,7 @@ class _LoginPageState extends State<LoginPage> {
                           ),
                           const SizedBox(height: 8),
                           TextFormField(
-                            controller: passwordController,
+                            controller: _passwordController,
                             obscureText: true,
                             decoration: InputDecoration(
                               hintText: 'Enter Password Here',
@@ -146,72 +285,7 @@ class _LoginPageState extends State<LoginPage> {
                               borderRadius: BorderRadius.circular(8)),
                           backgroundColor: const Color(0xff6531C4)),
                       onPressed: () {
-                        var email = emailController.text.trim();
-                        var pass = passwordController.text.trim();
-                        if (email.isEmpty || pass.isEmpty) {
-                          Fluttertoast.showToast(
-                            msg: 'Email dan password tidak boleh kosong',
-                            toastLength: Toast.LENGTH_SHORT,
-                          );
-                        } else if (email != 'miqdadabdillah279@gmail.com' ||
-                            pass != 'qwerty') {
-                          showDialog(
-                              context: context,
-                              builder: (context) {
-                                return AlertDialog(
-                                  title: Text(
-                                    'Login gagal',
-                                    style: GoogleFonts.poppins(
-                                        fontWeight: FontWeight.w600),
-                                  ),
-                                  content: const Text(
-                                      'Email atau Password Salah.\nSilahkan coba lagi!'),
-                                );
-                              });
-                        } else {
-                          showDialog(
-                              context: context,
-                              builder: (context) {
-                                return AlertDialog(
-                                  title: Text(
-                                    'Login Berhasil',
-                                    style: GoogleFonts.poppins(
-                                        fontWeight: FontWeight.w600),
-                                  ),
-                                  content: const Text(
-                                      'Welcome back,\nmiqdadabdillah279@gmail.com'),
-                                  actions: [
-                                    Center(
-                                      child: TextButton(
-                                        style: TextButton.styleFrom(
-                                          backgroundColor:
-                                              const Color(0xff6531C4),
-                                        ),
-                                        onPressed: () {
-                                          Navigator.push(
-                                            context,
-                                            MaterialPageRoute(
-                                                builder: (context) =>
-                                                    const ProfilePage()),
-                                          );
-                                        },
-                                        child: Padding(
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 20),
-                                          child: Text(
-                                            'Oke',
-                                            style: GoogleFonts.poppins(
-                                              fontWeight: FontWeight.w600,
-                                              color: Colors.white,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    )
-                                  ],
-                                );
-                              });
-                        }
+                        login(context);
                       },
                       child: Text(
                         'Login',
